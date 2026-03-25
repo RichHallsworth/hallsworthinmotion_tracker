@@ -979,7 +979,7 @@ function workingDaysInYear(year) {
   return count;
 }
 
-function fmt(n) { return '£' + (n||0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+function fmt(n) { return '£' + (parseFloat(n)||0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
 
 // ═══════════════════════════════════════════════════════════════
 // TABS
