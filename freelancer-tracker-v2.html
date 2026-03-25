@@ -1,0 +1,1702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HIM — Job Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f5f2ec;
+  --bg2: #ede9e1;
+  --surface: #ffffff;
+  --surface2: #f9f7f3;
+  --border: #e2ddd6;
+  --border2: #ccc8c0;
+  --text: #1a1814;
+  --muted: #8a8278;
+  --accent: #c94a1e;
+  --accent2: #2a5c8f;
+  --green: #2d7a4f;
+  --amber: #b07d1a;
+  --purple: #6b3fa0;
+  --ink: #1a1814;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── NOISE TEXTURE OVERLAY ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.4;
+}
+
+/* ── HEADER ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  background: var(--ink);
+  color: #f5f2ec;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  font-family: 'Instrument Serif', serif;
+  font-size: 20px;
+  color: #f5f2ec;
+  letter-spacing: -0.01em;
+}
+.logo em { color: var(--accent); font-style: italic; }
+
+.header-right { display: flex; align-items: center; gap: 16px; }
+
+nav { display: flex; gap: 2px; }
+nav button {
+  background: none;
+  border: none;
+  color: #9a9690;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  padding: 6px 14px;
+  cursor: pointer;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: all 0.15s;
+}
+nav button:hover { color: #f5f2ec; background: rgba(255,255,255,0.08); }
+nav button.active { color: #f5f2ec; background: var(--accent); }
+
+/* ── AUTH ── */
+#auth-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 56px);
+  gap: 24px;
+  padding: 40px;
+}
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 48px;
+  max-width: 440px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+}
+.auth-title {
+  font-family: 'Instrument Serif', serif;
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+.auth-sub { color: var(--muted); margin-bottom: 32px; line-height: 1.6; }
+.config-fields { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; text-align: left; }
+
+/* ── LAYOUT ── */
+main { max-width: 1280px; margin: 0 auto; padding: 28px 32px; }
+.tab { display: none; }
+.tab.active { display: block; animation: fadeIn 0.2s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── STAT GRID ── */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+}
+.stat-card.red::after    { background: var(--accent); }
+.stat-card.blue::after   { background: var(--accent2); }
+.stat-card.green::after  { background: var(--green); }
+.stat-card.amber::after  { background: var(--amber); }
+.stat-label { color: var(--muted); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
+.stat-value { font-family: 'Instrument Serif', serif; font-size: 34px; color: var(--text); line-height: 1; }
+.stat-sub { color: var(--muted); font-size: 10px; margin-top: 6px; }
+
+/* ── PANELS ── */
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 20px; }
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+}
+.panel-title { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.panel-body { padding: 20px; }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 8px 16px; border-radius: 6px; border: none;
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  cursor: pointer; transition: all 0.15s; letter-spacing: 0.03em;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #a83a10; }
+.btn-secondary { background: var(--accent2); color: #fff; }
+.btn-secondary:hover { background: #1e4a72; }
+.btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-danger { background: transparent; color: var(--accent); border: 1px solid transparent; }
+.btn-danger:hover { border-color: var(--accent); background: rgba(201,74,30,0.06); }
+.btn-sm { padding: 4px 10px; font-size: 10px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── SYNC STATUS ── */
+.sync-indicator {
+  font-size: 10px;
+  color: var(--muted);
+  display: flex; align-items: center; gap: 5px;
+  letter-spacing: 0.04em;
+}
+.sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.sync-dot.syncing { background: var(--amber); animation: pulse 1s infinite; }
+.sync-dot.error { background: var(--accent); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* ── TABLE ── */
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; color: var(--muted);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 0 14px 10px; border-bottom: 1px solid var(--border);
+}
+td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 3px;
+  font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;
+}
+.badge-quoted   { background: rgba(42,92,143,0.12); color: var(--accent2); }
+.badge-active   { background: rgba(176,125,26,0.12); color: var(--amber); }
+.badge-invoiced { background: rgba(107,63,160,0.12); color: var(--purple); }
+.badge-paid     { background: rgba(45,122,79,0.12); color: var(--green); }
+.badge-overdue  { background: rgba(201,74,30,0.15); color: var(--accent); }
+
+/* ── FORMS ── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+.form-grid.four  { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field.span2 { grid-column: span 2; }
+.field.span3 { grid-column: span 3; }
+label { color: var(--muted); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; }
+input, select, textarea {
+  background: var(--surface2); border: 1px solid var(--border2);
+  color: var(--text); font-family: 'Geist Mono', monospace; font-size: 12px;
+  padding: 8px 11px; border-radius: 6px; outline: none;
+  transition: border-color 0.15s; width: 100%;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); background: var(--surface); }
+select option { background: var(--surface2); }
+textarea { resize: vertical; min-height: 72px; }
+.form-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
+.form-section { margin-bottom: 20px; }
+.form-section-title {
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── MODAL ── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(26,24,20,0.6); z-index: 200;
+  backdrop-filter: blur(3px); align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 12px; width: 620px; max-width: 95vw;
+  max-height: 90vh; overflow-y: auto;
+  animation: modalIn 0.2s ease; box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+.modal-lg { width: 780px; }
+@keyframes modalIn { from { transform: scale(0.96) translateY(10px); opacity:0; } to { transform: scale(1) translateY(0); opacity:1; } }
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--surface); z-index: 1;
+}
+.modal-title { font-family: 'Instrument Serif', serif; font-size: 20px; }
+.modal-close { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px; transition: color 0.15s; }
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 24px; }
+
+/* ── RATE HISTORY ── */
+.rate-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.rate-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 8px; align-items: end;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 7px; padding: 10px 12px;
+}
+.rate-row.current-rate { border-color: var(--green); background: rgba(45,122,79,0.04); }
+
+/* ── FILTER BAR ── */
+.filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
+.filter-bar input { flex: 1; min-width: 180px; }
+.filter-bar select { width: auto; }
+
+/* ── ENTRY ITEMS ── */
+.entry-list { display: flex; flex-direction: column; gap: 7px; }
+.entry-item {
+  display: grid; grid-template-columns: 1fr auto auto auto auto;
+  gap: 12px; align-items: center;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 7px; padding: 10px 14px;
+  transition: border-color 0.15s;
+}
+.entry-item:hover { border-color: var(--border2); }
+.entry-job { font-weight: 500; }
+.entry-meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.entry-hours { color: var(--accent); font-weight: 600; }
+.entry-date { color: var(--muted); font-size: 11px; }
+.entry-value { color: var(--green); font-weight: 500; }
+
+/* ── CHARTS ── */
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+.chart-wrap.wide { grid-column: span 2; }
+.chart-title { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; font-weight: 600; }
+.chart-container { position: relative; height: 220px; }
+
+/* ── YEAR / PERIOD BAR ── */
+.period-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+.period-bar label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+.period-bar select { width: auto; padding: 6px 10px; font-size: 11px; }
+
+/* ── UTILISATION BAR ── */
+.util-bar-wrap { margin: 6px 0; }
+.util-bar-track { height: 8px; background: var(--bg2); border-radius: 4px; overflow: hidden; }
+.util-bar-fill { height: 100%; border-radius: 4px; background: var(--accent2); transition: width 0.6s ease; }
+
+/* ── CLIENT COLOUR DOTS ── */
+.cdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
+
+/* ── EMPTY STATE ── */
+.empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+.empty-icon { font-size: 28px; margin-bottom: 10px; }
+
+/* ── TOAST ── */
+#toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--ink); color: #f5f2ec;
+  padding: 10px 18px; border-radius: 8px; font-size: 12px;
+  transform: translateY(80px); transition: transform 0.3s ease;
+  z-index: 9000; max-width: 320px;
+}
+#toast.show { transform: translateY(0); }
+#toast.error { background: var(--accent); }
+
+/* ── OVERDUE HIGHLIGHT ── */
+tr.overdue-row td { background: rgba(201,74,30,0.03); }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ── LOADING SPINNER ── */
+.spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 768px) {
+  main { padding: 16px; }
+  header { padding: 12px 16px; }
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+  .chart-grid { grid-template-columns: 1fr; }
+  .chart-wrap.wide { grid-column: span 1; }
+  nav button { padding: 6px 8px; font-size: 10px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Hallsworth <em>In Motion</em> — Jobs</div>
+  <div class="header-right">
+    <div class="sync-indicator" id="sync-indicator" style="display:none;">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span id="sync-label">Synced</span>
+    </div>
+    <nav id="main-nav" style="display:none;">
+      <button class="active" onclick="showTab('dashboard')">Dashboard</button>
+      <button onclick="showTab('clients')">Clients</button>
+      <button onclick="showTab('jobs')">Jobs</button>
+      <button onclick="showTab('time')">Time</button>
+      <button onclick="showTab('expenses')">Expenses</button>
+      <button onclick="showTab('charts')">Charts</button>
+    </nav>
+    <button class="btn btn-ghost btn-sm" id="sign-out-btn" style="display:none;" onclick="signOut()">Sign out</button>
+  </div>
+</header>
+
+<!-- AUTH / CONFIG SCREEN -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-title">Job Tracker</div>
+    <p class="auth-sub">Connect your Google Sheet to get started. You'll only need to do this once.</p>
+    <div class="config-fields">
+      <div class="field">
+        <label>Google OAuth Client ID</label>
+        <input type="text" id="cfg-client-id" placeholder="xxxx.apps.googleusercontent.com">
+      </div>
+      <div class="field">
+        <label>Google Sheet ID</label>
+        <input type="text" id="cfg-sheet-id" placeholder="From the Sheet URL: /d/SHEET_ID/edit">
+      </div>
+    </div>
+    <button class="btn btn-primary" id="sign-in-btn" onclick="initAndSignIn()" style="width:100%;">
+      Connect with Google
+    </button>
+    <p style="color:var(--muted);font-size:10px;margin-top:16px;line-height:1.7;">
+      Your data lives in your own Google Sheet. This app never stores your data anywhere else.
+    </p>
+  </div>
+</div>
+
+<main id="main-app" style="display:none;">
+
+  <!-- DASHBOARD -->
+  <div class="tab active" id="tab-dashboard">
+    <div class="stat-grid" id="dash-stats"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Active &amp; Recent Jobs</span>
+          <button class="btn btn-ghost btn-sm" onclick="showTab('jobs')">All jobs →</button>
+        </div>
+        <div style="padding:0;">
+          <table><thead><tr>
+            <th>Job</th><th>Client</th><th>Status</th><th>Value</th>
+          </tr></thead><tbody id="dash-jobs-tbody"></tbody></table>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Upcoming Due Dates</span>
+        </div>
+        <div style="padding:0;">
+          <table><thead><tr>
+            <th>Job</th><th>Invoice #</th><th>Due</th><th>Amount</th>
+          </tr></thead><tbody id="dash-due-tbody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLIENTS -->
+  <div class="tab" id="tab-clients">
+    <div class="filter-bar">
+      <input type="text" id="client-search" placeholder="Search clients..." oninput="renderClients()">
+      <button class="btn btn-primary" onclick="openClientModal()">+ New Client</button>
+    </div>
+    <div class="panel" style="padding:0;">
+      <table>
+        <thead><tr>
+          <th>Client</th><th>Contact</th><th>Current Rate</th><th>Rate Since</th><th>Jobs</th><th>Total Revenue</th><th></th>
+        </tr></thead>
+        <tbody id="clients-tbody"></tbody>
+      </table>
+      <div id="clients-empty" class="empty" style="display:none;">
+        <div class="empty-icon">🏢</div><p>No clients yet. Add your first client.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- JOBS -->
+  <div class="tab" id="tab-jobs">
+    <div class="filter-bar">
+      <input type="text" id="job-search" placeholder="Search jobs or clients..." oninput="renderJobs()">
+      <select id="job-status-filter" onchange="renderJobs()">
+        <option value="">All statuses</option>
+        <option value="quoted">Quoted</option>
+        <option value="active">Active</option>
+        <option value="invoiced">Invoiced</option>
+        <option value="paid">Paid</option>
+        <option value="overdue">Overdue</option>
+      </select>
+      <select id="job-client-filter" onchange="renderJobs()">
+        <option value="">All clients</option>
+      </select>
+      <button class="btn btn-primary" onclick="openJobModal()">+ New Job</button>
+    </div>
+    <div class="panel" style="padding:0;">
+      <table>
+        <thead><tr>
+          <th>Title</th><th>Client</th><th>Rate</th><th>Hours</th><th>Value</th>
+          <th>Expenses</th><th>Invoice</th><th>Due</th><th>Status</th><th></th>
+        </tr></thead>
+        <tbody id="jobs-tbody"></tbody>
+      </table>
+      <div id="jobs-empty" class="empty" style="display:none;">
+        <div class="empty-icon">📋</div><p>No jobs yet.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIME -->
+  <div class="tab" id="tab-time">
+    <div class="filter-bar">
+      <select id="time-job-filter" onchange="renderTimeEntries()"><option value="">All jobs</option></select>
+      <select id="time-client-filter" onchange="filterTimeByClient()"><option value="">All clients</option></select>
+      <input type="month" id="time-month-filter" onchange="renderTimeEntries()">
+      <button class="btn btn-primary" onclick="openTimeModal()">+ Log Time</button>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Time Entries</span>
+        <span id="time-total-label" style="color:var(--accent);font-size:11px;font-weight:600;"></span>
+      </div>
+      <div class="panel-body">
+        <div class="entry-list" id="entries-list"></div>
+        <div id="entries-empty" class="empty" style="display:none;">
+          <div class="empty-icon">⏱</div><p>No time entries yet.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPENSES -->
+  <div class="tab" id="tab-expenses">
+    <div class="filter-bar">
+      <select id="exp-job-filter" onchange="renderExpenses()"><option value="">All jobs</option></select>
+      <input type="month" id="exp-month-filter" onchange="renderExpenses()">
+      <button class="btn btn-primary" onclick="openExpenseModal()">+ Add Expense</button>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Expenses</span>
+        <span id="exp-total-label" style="color:var(--accent);font-size:11px;font-weight:600;"></span>
+      </div>
+      <div style="padding:0;">
+        <table>
+          <thead><tr><th>Date</th><th>Job</th><th>Client</th><th>Description</th><th>Amount</th><th></th></tr></thead>
+          <tbody id="expenses-tbody"></tbody>
+        </table>
+        <div id="expenses-empty" class="empty" style="display:none;">
+          <div class="empty-icon">🧾</div><p>No expenses logged.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="tab" id="tab-charts">
+    <div class="period-bar">
+      <label>Year</label>
+      <select id="chart-year" onchange="renderCharts()"></select>
+    </div>
+    <div class="stat-grid" id="chart-stats"></div>
+    <div class="chart-grid">
+      <div class="chart-wrap wide">
+        <div class="chart-title">Days Distributed Across Clients — by Month</div>
+        <div class="chart-container"><canvas id="chart-clients"></canvas></div>
+      </div>
+      <div class="chart-wrap wide">
+        <div class="chart-title">Revenue by Month (£)</div>
+        <div class="chart-container"><canvas id="chart-revenue"></canvas></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title">Revenue by Client</div>
+        <div class="chart-container"><canvas id="chart-pie"></canvas></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title">Utilisation — Billable Days vs Working Days</div>
+        <div id="util-detail" style="padding:4px 0;"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- CLIENT MODAL -->
+<div class="modal-overlay" id="client-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="client-modal-title">New Client</span>
+      <button class="modal-close" onclick="closeModal('client-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-section">
+        <div class="form-section-title">Client Details</div>
+        <div class="form-grid" style="margin-bottom:12px;">
+          <div class="field"><label>Company Name *</label><input type="text" id="fc-name" placeholder="Acme Ltd"></div>
+          <div class="field"><label>Contact Name</label><input type="text" id="fc-contact" placeholder="Jane Smith"></div>
+        </div>
+        <div class="form-grid" style="margin-bottom:12px;">
+          <div class="field"><label>Email</label><input type="email" id="fc-email" placeholder="jane@acme.com"></div>
+          <div class="field"><label>Phone</label><input type="text" id="fc-phone" placeholder="+44 7xxx"></div>
+        </div>
+        <div class="field"><label>Notes</label><textarea id="fc-notes" placeholder="Any notes about this client..."></textarea></div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Day Rate History</div>
+        <div class="rate-list" id="rate-list"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addRateRow()">+ Add Rate Period</button>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal('client-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveClient()">Save Client</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JOB MODAL -->
+<div class="modal-overlay" id="job-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="job-modal-title">New Job</span>
+      <button class="modal-close" onclick="closeModal('job-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div class="field"><label>Job Title *</label><input type="text" id="fj-title" placeholder="Brand video for Acme"></div>
+        <div class="field">
+          <label>Client *</label>
+          <select id="fj-client" onchange="onJobClientChange()"><option value="">Select client...</option></select>
+        </div>
+      </div>
+      <div class="form-grid three" style="margin-bottom:14px;">
+        <div class="field">
+          <label>Rate Type</label>
+          <select id="fj-rate-type" onchange="toggleJobRateFields()">
+            <option value="day">Day Rate</option>
+            <option value="hourly">Hourly</option>
+            <option value="fixed">Fixed Fee</option>
+          </select>
+        </div>
+        <div class="field" id="fj-rate-wrap">
+          <label>Rate (£) <span id="fj-rate-hint" style="color:var(--green);font-size:9px;"></span></label>
+          <input type="number" id="fj-rate" placeholder="0.00" step="0.01">
+        </div>
+        <div class="field" id="fj-fixed-wrap" style="display:none;">
+          <label>Fixed Fee (£)</label>
+          <input type="number" id="fj-fixed" placeholder="0.00" step="0.01">
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select id="fj-status">
+            <option value="quoted">Quoted</option>
+            <option value="active" selected>Active</option>
+            <option value="invoiced">Invoiced</option>
+            <option value="paid">Paid</option>
+            <option value="overdue">Overdue</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid four" style="margin-bottom:14px;">
+        <div class="field"><label>Start Date</label><input type="date" id="fj-start"></div>
+        <div class="field"><label>End Date</label><input type="date" id="fj-end"></div>
+        <div class="field"><label>Invoice Number</label><input type="text" id="fj-invoice" placeholder="INV-001"></div>
+        <div class="field"><label>Due Date</label><input type="date" id="fj-due"></div>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="fj-notes" placeholder="Any additional details..."></textarea></div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal('job-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveJob()">Save Job</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TIME MODAL -->
+<div class="modal-overlay" id="time-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Log Time</span>
+      <button class="modal-close" onclick="closeModal('time-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="margin-bottom:14px;">
+        <label>Job *</label>
+        <select id="ft-job"><option value="">Select a job...</option></select>
+      </div>
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div class="field"><label>Date *</label><input type="date" id="ft-date"></div>
+        <div class="field"><label>Hours *</label><input type="number" id="ft-hours" placeholder="0.0" step="0.5" min="0.5" max="24"></div>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="ft-notes" placeholder="What did you work on?"></textarea></div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal('time-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTime()">Log Time</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EXPENSE MODAL -->
+<div class="modal-overlay" id="expense-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Add Expense</span>
+      <button class="modal-close" onclick="closeModal('expense-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="margin-bottom:14px;">
+        <label>Job *</label>
+        <select id="fe-job"><option value="">Select a job...</option></select>
+      </div>
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div class="field"><label>Date *</label><input type="date" id="fe-date"></div>
+        <div class="field"><label>Amount (£) *</label><input type="number" id="fe-amount" placeholder="0.00" step="0.01"></div>
+      </div>
+      <div class="field"><label>Description *</label><input type="text" id="fe-desc" placeholder="e.g. Stock footage licence"></div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal('expense-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveExpense()">Save Expense</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIG & STATE
+// ═══════════════════════════════════════════════════════════════
+const LS_CONFIG = 'him_tracker_config';
+let CFG = JSON.parse(localStorage.getItem(LS_CONFIG) || '{}');
+
+let gapi_loaded = false;
+let tokenClient = null;
+let accessToken = null;
+
+// In-memory data store
+let DB = { clients: [], rates: [], jobs: [], time_entries: [], expenses: [] };
+
+// Editing state
+let editingId = { client: null, job: null };
+
+// Sheet column maps (0-indexed)
+const COLS = {
+  clients:      ['id','name','contactName','email','phone','notes'],
+  rates:        ['id','clientId','dayRate','fromDate','toDate'],
+  jobs:         ['id','clientId','title','rateType','rateOverride','fixedFee','status','invoiceNumber','dueDate','startDate','endDate','notes'],
+  time_entries: ['id','jobId','date','hours','notes'],
+  expenses:     ['id','jobId','date','amount','description'],
+};
+
+const CLIENT_PALETTE = [
+  '#c94a1e','#2a5c8f','#2d7a4f','#b07d1a','#6b3fa0',
+  '#c44569','#0f6b8e','#7a6e2d','#1a6b5c','#8e3a2d'
+];
+
+// ═══════════════════════════════════════════════════════════════
+// GOOGLE AUTH & API
+// ═══════════════════════════════════════════════════════════════
+function loadGoogleScripts(callback) {
+  let gapiLoaded = false, gsiLoaded = false;
+  const check = () => { if (gapiLoaded && gsiLoaded) callback(); };
+
+  const s1 = document.createElement('script');
+  s1.src = 'https://apis.google.com/js/api.js';
+  s1.onload = () => { gapi.load('client', () => { gapiLoaded = true; check(); }); };
+  document.head.appendChild(s1);
+
+  const s2 = document.createElement('script');
+  s2.src = 'https://accounts.google.com/gsi/client';
+  s2.onload = () => { gsiLoaded = true; check(); };
+  document.head.appendChild(s2);
+}
+
+async function initAndSignIn() {
+  const clientId = document.getElementById('cfg-client-id').value.trim();
+  const sheetId  = document.getElementById('cfg-sheet-id').value.trim();
+  if (!clientId || !sheetId) { showToast('Please enter both Client ID and Sheet ID', true); return; }
+
+  CFG = { clientId, sheetId };
+  localStorage.setItem(LS_CONFIG, JSON.stringify(CFG));
+
+  const btn = document.getElementById('sign-in-btn');
+  btn.innerHTML = '<span class="spinner"></span> Connecting...';
+  btn.disabled = true;
+
+  loadGoogleScripts(async () => {
+    try {
+      await gapi.client.init({
+        discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+      });
+
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CFG.clientId,
+        scope: 'https://www.googleapis.com/auth/spreadsheets',
+        callback: async (resp) => {
+          if (resp.error) { showToast('Auth failed: ' + resp.error, true); return; }
+          accessToken = resp.access_token;
+          gapi.client.setToken({ access_token: accessToken });
+          await ensureSheetsExist();
+          await loadAllData();
+          showApp();
+        },
+      });
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    } catch(e) {
+      showToast('Failed to connect: ' + e.message, true);
+      btn.innerHTML = 'Connect with Google';
+      btn.disabled = false;
+    }
+  });
+}
+
+function signOut() {
+  if (accessToken) google.accounts.oauth2.revoke(accessToken);
+  accessToken = null;
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('main-nav').style.display = 'none';
+  document.getElementById('sign-out-btn').style.display = 'none';
+  document.getElementById('sync-indicator').style.display = 'none';
+}
+
+function showApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+  document.getElementById('main-nav').style.display = 'flex';
+  document.getElementById('sign-out-btn').style.display = 'inline-flex';
+  document.getElementById('sync-indicator').style.display = 'flex';
+  renderDashboard();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHEETS SETUP
+// ═══════════════════════════════════════════════════════════════
+async function ensureSheetsExist() {
+  setSyncing(true);
+  try {
+    const resp = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: CFG.sheetId });
+    const existing = resp.result.sheets.map(s => s.properties.title);
+    const needed = Object.keys(COLS);
+    const missing = needed.filter(n => !existing.includes(n));
+
+    if (missing.length) {
+      const requests = missing.map(title => ({
+        addSheet: { properties: { title } }
+      }));
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: CFG.sheetId,
+        resource: { requests }
+      });
+      // Add header rows
+      const headerData = missing.map(sheet => ({
+        range: `${sheet}!A1`,
+        values: [COLS[sheet]]
+      }));
+      await gapi.client.sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: CFG.sheetId,
+        resource: { valueInputOption: 'RAW', data: headerData }
+      });
+    }
+    setSyncing(false);
+  } catch(e) {
+    setSyncing(false, true);
+    showToast('Sheet setup failed: ' + e.message, true);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DATA LOAD / SYNC
+// ═══════════════════════════════════════════════════════════════
+async function loadAllData() {
+  setSyncing(true);
+  try {
+    const sheets = Object.keys(COLS);
+    const ranges = sheets.map(s => `${s}!A2:Z`);
+    const resp = await gapi.client.sheets.spreadsheets.values.batchGet({
+      spreadsheetId: CFG.sheetId,
+      ranges,
+    });
+
+    sheets.forEach((sheet, i) => {
+      const rows = resp.result.valueRanges[i].values || [];
+      const keys = COLS[sheet];
+      DB[sheet] = rows.map(row => {
+        const obj = {};
+        keys.forEach((k, ki) => { obj[k] = row[ki] || ''; });
+        return obj;
+      });
+    });
+    setSyncing(false);
+    showToast('Data loaded');
+  } catch(e) {
+    setSyncing(false, true);
+    showToast('Load failed: ' + e.message, true);
+  }
+}
+
+async function appendRow(sheet, obj) {
+  const row = COLS[sheet].map(k => obj[k] || '');
+  await gapi.client.sheets.spreadsheets.values.append({
+    spreadsheetId: CFG.sheetId,
+    range: `${sheet}!A1`,
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    resource: { values: [row] }
+  });
+}
+
+async function updateRow(sheet, obj) {
+  // Find row index in sheet (1-indexed, +1 for header)
+  const idx = DB[sheet].findIndex(r => r.id === obj.id);
+  if (idx === -1) return;
+  const rowNum = idx + 2;
+  const row = COLS[sheet].map(k => obj[k] || '');
+  await gapi.client.sheets.spreadsheets.values.update({
+    spreadsheetId: CFG.sheetId,
+    range: `${sheet}!A${rowNum}`,
+    valueInputOption: 'RAW',
+    resource: { values: [row] }
+  });
+}
+
+async function deleteRow(sheet, id) {
+  // We blank the row and reload; simplest approach for a single-user tool
+  const idx = DB[sheet].findIndex(r => r.id === id);
+  if (idx === -1) return;
+  const rowNum = idx + 2;
+  const blank = COLS[sheet].map(() => '');
+  await gapi.client.sheets.spreadsheets.values.update({
+    spreadsheetId: CFG.sheetId,
+    range: `${sheet}!A${rowNum}`,
+    valueInputOption: 'RAW',
+    resource: { values: [blank] }
+  });
+  DB[sheet] = DB[sheet].filter(r => r.id !== id);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function setSyncing(active, error = false) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  dot.className = 'sync-dot' + (error ? ' error' : active ? ' syncing' : '');
+  lbl.textContent = error ? 'Error' : active ? 'Syncing...' : 'Synced';
+}
+
+let toastTimer;
+function showToast(msg, error = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show' + (error ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, 3000);
+}
+
+function clientColor(clientId) {
+  const idx = DB.clients.findIndex(c => c.id === clientId);
+  return CLIENT_PALETTE[idx % CLIENT_PALETTE.length] || '#8a8278';
+}
+
+function clientName(clientId) {
+  const c = DB.clients.find(c => c.id === clientId);
+  return c ? c.name : '—';
+}
+
+// Rate lookup: find day rate for a client on a given date
+function lookupRate(clientId, date) {
+  const d = date || new Date().toISOString().split('T')[0];
+  const rates = DB.rates.filter(r => r.clientId === clientId && r.id);
+  for (const r of rates) {
+    const from = r.fromDate || '0000-01-01';
+    const to   = r.toDate   || '9999-12-31';
+    if (d >= from && d <= to) return parseFloat(r.dayRate) || 0;
+  }
+  // fallback: most recent rate
+  const sorted = rates.sort((a,b) => (b.fromDate||'').localeCompare(a.fromDate||''));
+  return sorted.length ? (parseFloat(sorted[0].dayRate) || 0) : 0;
+}
+
+function jobHours(jobId) {
+  return DB.time_entries.filter(e => e.jobId === jobId)
+    .reduce((s, e) => s + (parseFloat(e.hours) || 0), 0);
+}
+
+function jobExpenses(jobId) {
+  return DB.expenses.filter(e => e.jobId === jobId)
+    .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+}
+
+function jobValue(job) {
+  if (job.rateType === 'fixed') return parseFloat(job.fixedFee) || 0;
+  const hours = jobHours(job.id);
+  const rate = job.rateOverride
+    ? parseFloat(job.rateOverride)
+    : lookupRate(job.clientId, job.startDate);
+  if (job.rateType === 'day') return (hours / 8) * rate;
+  return hours * rate; // hourly
+}
+
+function workingDaysInYear(year) {
+  let count = 0;
+  const d = new Date(year, 0, 1);
+  while (d.getFullYear() === year) {
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+function fmt(n) { return '£' + (n||0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+
+// ═══════════════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════════════
+const TAB_MAP = ['dashboard','clients','jobs','time','expenses','charts'];
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelectorAll('nav button').forEach((b, i) => {
+    b.classList.toggle('active', TAB_MAP[i] === name);
+  });
+  const renders = {
+    dashboard: renderDashboard, clients: renderClients, jobs: renderJobs,
+    time: renderTimeEntries, expenses: renderExpenses, charts: renderCharts
+  };
+  if (renders[name]) renders[name]();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+function renderDashboard() {
+  const year = new Date().getFullYear();
+  const ytdEntries = DB.time_entries.filter(e => e.date && e.date.startsWith(year));
+  const ytdHours = ytdEntries.reduce((s,e) => s + (parseFloat(e.hours)||0), 0);
+  const ytdJobs = DB.jobs.filter(j => j.startDate && j.startDate.startsWith(year));
+  const ytdRevenue = ytdJobs.reduce((s,j) => s+jobValue(j), 0);
+  const unpaid = DB.jobs.filter(j => ['invoiced','overdue'].includes(j.status)).reduce((s,j)=>s+jobValue(j),0);
+  const active = DB.jobs.filter(j => j.status === 'active').length;
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card red"><div class="stat-label">YTD Revenue</div><div class="stat-value">${fmt(ytdRevenue)}</div><div class="stat-sub">${year}</div></div>
+    <div class="stat-card amber"><div class="stat-label">Outstanding</div><div class="stat-value">${fmt(unpaid)}</div><div class="stat-sub">invoiced + overdue</div></div>
+    <div class="stat-card blue"><div class="stat-label">Active Jobs</div><div class="stat-value">${active}</div><div class="stat-sub">in progress</div></div>
+    <div class="stat-card green"><div class="stat-label">YTD Days</div><div class="stat-value">${(ytdHours/8).toFixed(1)}</div><div class="stat-sub">${ytdHours.toFixed(1)} hours</div></div>
+  `;
+
+  // Recent jobs
+  const tbody = document.getElementById('dash-jobs-tbody');
+  const recent = [...DB.jobs].reverse().slice(0, 6);
+  tbody.innerHTML = recent.length ? recent.map(j => `
+    <tr>
+      <td>${j.title}</td>
+      <td><span class="cdot" style="background:${clientColor(j.clientId)}"></span>${clientName(j.clientId)}</td>
+      <td><span class="badge badge-${j.status}">${j.status}</span></td>
+      <td>${fmt(jobValue(j))}</td>
+    </tr>`).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">No jobs yet</td></tr>`;
+
+  // Due dates
+  const today = new Date().toISOString().split('T')[0];
+  const due = DB.jobs.filter(j => j.dueDate && j.status !== 'paid').sort((a,b) => a.dueDate.localeCompare(b.dueDate));
+  const dtbody = document.getElementById('dash-due-tbody');
+  dtbody.innerHTML = due.length ? due.slice(0,6).map(j => {
+    const overdue = j.dueDate < today;
+    return `<tr>
+      <td>${j.title}</td>
+      <td style="color:var(--muted)">${j.invoiceNumber || '—'}</td>
+      <td style="color:${overdue?'var(--accent)':'inherit'}">${j.dueDate}${overdue?' ⚠':''}      </td>
+      <td>${fmt(jobValue(j))}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">No upcoming due dates</td></tr>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CLIENTS
+// ═══════════════════════════════════════════════════════════════
+function renderClients() {
+  const search = document.getElementById('client-search').value.toLowerCase();
+  const filtered = DB.clients.filter(c => !search || c.name.toLowerCase().includes(search) || (c.contactName||'').toLowerCase().includes(search));
+  const tbody = document.getElementById('clients-tbody');
+  const empty = document.getElementById('clients-empty');
+  if (!filtered.length) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(c => {
+    const rates = DB.rates.filter(r => r.clientId === c.id).sort((a,b) => (b.fromDate||'').localeCompare(a.fromDate||''));
+    const current = rates.find(r => !r.toDate || r.toDate >= new Date().toISOString().split('T')[0]);
+    const jobCount = DB.jobs.filter(j => j.clientId === c.id).length;
+    const revenue = DB.jobs.filter(j => j.clientId === c.id).reduce((s,j) => s+jobValue(j), 0);
+    return `<tr>
+      <td><strong><span class="cdot" style="background:${clientColor(c.id)}"></span>${c.name}</strong>${c.contactName?`<div style="color:var(--muted);font-size:10px">${c.contactName}</div>`:''}</td>
+      <td style="color:var(--muted)">${c.email||'—'}</td>
+      <td>${current ? fmt(current.dayRate)+'/day' : '—'}</td>
+      <td style="color:var(--muted)">${current ? current.fromDate : '—'}</td>
+      <td>${jobCount}</td>
+      <td style="color:var(--green);font-weight:600">${fmt(revenue)}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn btn-ghost btn-sm" onclick="openClientModal('${c.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteClient('${c.id}')">Del</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// Rate rows in modal
+let tempRates = [];
+function openClientModal(id = null) {
+  editingId.client = id;
+  const c = id ? DB.clients.find(x => x.id === id) : null;
+  document.getElementById('client-modal-title').textContent = id ? 'Edit Client' : 'New Client';
+  document.getElementById('fc-name').value    = c?.name || '';
+  document.getElementById('fc-contact').value = c?.contactName || '';
+  document.getElementById('fc-email').value   = c?.email || '';
+  document.getElementById('fc-phone').value   = c?.phone || '';
+  document.getElementById('fc-notes').value   = c?.notes || '';
+
+  tempRates = id ? DB.rates.filter(r => r.clientId === id).map(r => ({...r})) : [];
+  renderRateList();
+  document.getElementById('client-modal').classList.add('open');
+}
+
+function renderRateList() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('rate-list').innerHTML = tempRates.map((r, i) => {
+    const isCurrent = !r.toDate || r.toDate >= today;
+    return `<div class="rate-row ${isCurrent?'current-rate':''}">
+      <div class="field"><label>Day Rate (£)</label><input type="number" value="${r.dayRate||''}" step="0.01" onchange="tempRates[${i}].dayRate=this.value" placeholder="0.00"></div>
+      <div class="field"><label>From Date</label><input type="date" value="${r.fromDate||''}" onchange="tempRates[${i}].fromDate=this.value"></div>
+      <div class="field"><label>To Date <span style="color:var(--muted)">(blank = current)</span></label><input type="date" value="${r.toDate||''}" onchange="tempRates[${i}].toDate=this.value"></div>
+      <button class="btn btn-danger btn-sm" onclick="removeRateRow(${i})" style="margin-top:18px;">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function addRateRow() {
+  tempRates.push({ id: uid(), clientId: editingId.client || '', dayRate: '', fromDate: '', toDate: '' });
+  renderRateList();
+}
+
+function removeRateRow(i) {
+  tempRates.splice(i, 1);
+  renderRateList();
+}
+
+async function saveClient() {
+  const name = document.getElementById('fc-name').value.trim();
+  if (!name) { showToast('Client name is required', true); return; }
+  setSyncing(true);
+  try {
+    const id = editingId.client || uid();
+    const obj = {
+      id, name,
+      contactName: document.getElementById('fc-contact').value.trim(),
+      email:       document.getElementById('fc-email').value.trim(),
+      phone:       document.getElementById('fc-phone').value.trim(),
+      notes:       document.getElementById('fc-notes').value.trim(),
+    };
+
+    if (editingId.client) {
+      const idx = DB.clients.findIndex(c => c.id === id);
+      DB.clients[idx] = obj;
+      await updateRow('clients', obj);
+
+      // Handle rates: delete old, re-append
+      const oldRates = DB.rates.filter(r => r.clientId === id);
+      for (const r of oldRates) await deleteRow('rates', r.id);
+      DB.rates = DB.rates.filter(r => r.clientId !== id);
+    } else {
+      DB.clients.push(obj);
+      await appendRow('clients', obj);
+    }
+
+    // Save rates
+    for (const r of tempRates) {
+      const rObj = { id: r.id || uid(), clientId: id, dayRate: r.dayRate, fromDate: r.fromDate, toDate: r.toDate };
+      DB.rates.push(rObj);
+      await appendRow('rates', rObj);
+    }
+
+    setSyncing(false);
+    showToast(editingId.client ? 'Client updated' : 'Client saved');
+    closeModal('client-modal');
+    renderClients();
+  } catch(e) {
+    setSyncing(false, true);
+    showToast('Save failed: ' + e.message, true);
+  }
+}
+
+async function deleteClient(id) {
+  if (!confirm('Delete this client? Their jobs and time entries will remain but lose the client link.')) return;
+  setSyncing(true);
+  try {
+    await deleteRow('clients', id);
+    const clientRates = DB.rates.filter(r => r.clientId === id);
+    for (const r of clientRates) await deleteRow('rates', r.id);
+    DB.rates = DB.rates.filter(r => r.clientId !== id);
+    setSyncing(false);
+    renderClients();
+    showToast('Client deleted');
+  } catch(e) { setSyncing(false, true); showToast('Delete failed', true); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// JOBS
+// ═══════════════════════════════════════════════════════════════
+function populateJobClientFilter() {
+  const sel = document.getElementById('job-client-filter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All clients</option>' +
+    DB.clients.map(c => `<option value="${c.id}" ${c.id===cur?'selected':''}>${c.name}</option>`).join('');
+}
+
+function renderJobs() {
+  populateJobClientFilter();
+  const search = document.getElementById('job-search').value.toLowerCase();
+  const statusF = document.getElementById('job-status-filter').value;
+  const clientF = document.getElementById('job-client-filter').value;
+  const today = new Date().toISOString().split('T')[0];
+
+  let filtered = DB.jobs.filter(j => {
+    const name = clientName(j.clientId).toLowerCase();
+    return (!search || j.title.toLowerCase().includes(search) || name.includes(search))
+      && (!statusF || j.status === statusF)
+      && (!clientF || j.clientId === clientF);
+  });
+
+  const tbody = document.getElementById('jobs-tbody');
+  const empty = document.getElementById('jobs-empty');
+  if (!filtered.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+
+  tbody.innerHTML = [...filtered].reverse().map(j => {
+    const hours = jobHours(j.id);
+    const val = jobValue(j);
+    const exp = jobExpenses(j.id);
+    const isOverdue = j.dueDate && j.dueDate < today && j.status !== 'paid';
+    const rateStr = j.rateType === 'fixed' ? `Fixed ${fmt(j.fixedFee)}`
+      : j.rateType === 'day' ? `${fmt(j.rateOverride || lookupRate(j.clientId, j.startDate))}/d`
+      : `${fmt(j.rateOverride || lookupRate(j.clientId, j.startDate))}/h`;
+    return `<tr class="${isOverdue?'overdue-row':''}">
+      <td><strong>${j.title}</strong>${j.notes?`<div style="color:var(--muted);font-size:10px">${j.notes.slice(0,50)}${j.notes.length>50?'…':''}</div>`:''}</td>
+      <td><span class="cdot" style="background:${clientColor(j.clientId)}"></span>${clientName(j.clientId)}</td>
+      <td style="color:var(--muted)">${rateStr}</td>
+      <td>${hours.toFixed(1)}h</td>
+      <td style="font-weight:600">${fmt(val)}</td>
+      <td style="color:var(--muted)">${exp>0?fmt(exp):'—'}</td>
+      <td style="color:var(--muted)">${j.invoiceNumber||'—'}</td>
+      <td style="color:${isOverdue?'var(--accent)':'var(--muted)'}">${j.dueDate||'—'}</td>
+      <td><span class="badge badge-${j.status}">${j.status}</span></td>
+      <td style="display:flex;gap:4px;flex-wrap:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="openJobModal('${j.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteJob('${j.id}')">Del</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openJobModal(id = null) {
+  editingId.job = id;
+  const j = id ? DB.jobs.find(x => x.id === id) : null;
+  document.getElementById('job-modal-title').textContent = id ? 'Edit Job' : 'New Job';
+
+  // Populate client dropdown
+  const sel = document.getElementById('fj-client');
+  sel.innerHTML = '<option value="">Select client...</option>' +
+    DB.clients.map(c => `<option value="${c.id}" ${j&&j.clientId===c.id?'selected':''}>${c.name}</option>`).join('');
+
+  if (j) {
+    document.getElementById('fj-title').value      = j.title;
+    document.getElementById('fj-rate-type').value  = j.rateType || 'day';
+    document.getElementById('fj-rate').value       = j.rateOverride || '';
+    document.getElementById('fj-fixed').value      = j.fixedFee || '';
+    document.getElementById('fj-status').value     = j.status;
+    document.getElementById('fj-start').value      = j.startDate || '';
+    document.getElementById('fj-end').value        = j.endDate || '';
+    document.getElementById('fj-invoice').value    = j.invoiceNumber || '';
+    document.getElementById('fj-due').value        = j.dueDate || '';
+    document.getElementById('fj-notes').value      = j.notes || '';
+  } else {
+    ['fj-title','fj-rate','fj-fixed','fj-invoice','fj-due','fj-end','fj-notes'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('fj-rate-type').value = 'day';
+    document.getElementById('fj-status').value    = 'active';
+    document.getElementById('fj-start').value     = new Date().toISOString().split('T')[0];
+  }
+  toggleJobRateFields();
+  updateRateHint();
+  document.getElementById('job-modal').classList.add('open');
+}
+
+function toggleJobRateFields() {
+  const t = document.getElementById('fj-rate-type').value;
+  document.getElementById('fj-rate-wrap').style.display  = t === 'fixed' ? 'none' : 'flex';
+  document.getElementById('fj-fixed-wrap').style.display = t === 'fixed' ? 'flex' : 'none';
+}
+
+function onJobClientChange() { updateRateHint(); }
+
+function updateRateHint() {
+  const clientId = document.getElementById('fj-client').value;
+  const date = document.getElementById('fj-start').value || new Date().toISOString().split('T')[0];
+  const hint = document.getElementById('fj-rate-hint');
+  if (clientId) {
+    const r = lookupRate(clientId, date);
+    hint.textContent = r ? `client rate: ${fmt(r)}/d` : '(no rate set)';
+    if (!document.getElementById('fj-rate').value) document.getElementById('fj-rate').placeholder = r || '0.00';
+  } else {
+    hint.textContent = '';
+  }
+}
+
+async function saveJob() {
+  const title = document.getElementById('fj-title').value.trim();
+  const clientId = document.getElementById('fj-client').value;
+  if (!title || !clientId) { showToast('Title and client are required', true); return; }
+  setSyncing(true);
+  try {
+    const id = editingId.job || uid();
+    const obj = {
+      id, clientId, title,
+      rateType:      document.getElementById('fj-rate-type').value,
+      rateOverride:  document.getElementById('fj-rate').value,
+      fixedFee:      document.getElementById('fj-fixed').value,
+      status:        document.getElementById('fj-status').value,
+      invoiceNumber: document.getElementById('fj-invoice').value.trim(),
+      dueDate:       document.getElementById('fj-due').value,
+      startDate:     document.getElementById('fj-start').value,
+      endDate:       document.getElementById('fj-end').value,
+      notes:         document.getElementById('fj-notes').value.trim(),
+    };
+    if (editingId.job) {
+      const idx = DB.jobs.findIndex(j => j.id === id);
+      DB.jobs[idx] = obj;
+      await updateRow('jobs', obj);
+    } else {
+      DB.jobs.push(obj);
+      await appendRow('jobs', obj);
+    }
+    setSyncing(false);
+    showToast(editingId.job ? 'Job updated' : 'Job saved');
+    closeModal('job-modal');
+    renderJobs();
+    renderDashboard();
+  } catch(e) { setSyncing(false, true); showToast('Save failed: ' + e.message, true); }
+}
+
+async function deleteJob(id) {
+  if (!confirm('Delete this job? Time entries and expenses for it will also be deleted.')) return;
+  setSyncing(true);
+  try {
+    await deleteRow('jobs', id);
+    const te = DB.time_entries.filter(e => e.jobId === id);
+    for (const e of te) await deleteRow('time_entries', e.id);
+    DB.time_entries = DB.time_entries.filter(e => e.jobId !== id);
+    const ex = DB.expenses.filter(e => e.jobId === id);
+    for (const e of ex) await deleteRow('expenses', e.id);
+    DB.expenses = DB.expenses.filter(e => e.jobId !== id);
+    setSyncing(false);
+    renderJobs(); renderDashboard();
+    showToast('Job deleted');
+  } catch(e) { setSyncing(false, true); showToast('Delete failed', true); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TIME ENTRIES
+// ═══════════════════════════════════════════════════════════════
+function populateJobSelects() {
+  const opts = DB.jobs.map(j => `<option value="${j.id}">[${clientName(j.clientId)}] ${j.title}</option>`).join('');
+  ['ft-job','time-job-filter'].forEach(id => {
+    document.getElementById(id).innerHTML = (id.includes('filter') ? '<option value="">All jobs</option>' : '<option value="">Select a job...</option>') + opts;
+  });
+  document.getElementById('time-client-filter').innerHTML = '<option value="">All clients</option>' +
+    DB.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+}
+
+function filterTimeByClient() {
+  const clientId = document.getElementById('time-client-filter').value;
+  const jobSel = document.getElementById('time-job-filter');
+  const jobs = clientId ? DB.jobs.filter(j => j.clientId === clientId) : DB.jobs;
+  jobSel.innerHTML = '<option value="">All jobs</option>' +
+    jobs.map(j => `<option value="${j.id}">${j.title}</option>`).join('');
+  renderTimeEntries();
+}
+
+function renderTimeEntries() {
+  populateJobSelects();
+  const jobFilter   = document.getElementById('time-job-filter').value;
+  const monthFilter = document.getElementById('time-month-filter').value;
+  let filtered = DB.time_entries.filter(e =>
+    (!jobFilter || e.jobId === jobFilter) &&
+    (!monthFilter || (e.date||'').startsWith(monthFilter))
+  );
+  filtered = [...filtered].sort((a,b) => b.date.localeCompare(a.date));
+
+  const total = filtered.reduce((s,e) => s+(parseFloat(e.hours)||0), 0);
+  document.getElementById('time-total-label').textContent = filtered.length ? `${total.toFixed(1)}h = ${(total/8).toFixed(1)} days` : '';
+
+  const list  = document.getElementById('entries-list');
+  const empty = document.getElementById('entries-empty');
+  if (!filtered.length) { list.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+
+  list.innerHTML = filtered.map(e => {
+    const job = DB.jobs.find(j => j.id === e.jobId);
+    const rate = job ? lookupRate(job.clientId, e.date) : 0;
+    const val = job && job.rateType !== 'fixed' ? (parseFloat(e.hours)||0) / 8 * rate : 0;
+    return `<div class="entry-item">
+      <div>
+        <div class="entry-job">${job ? job.title : 'Unknown job'}</div>
+        <div class="entry-meta">${job ? clientName(job.clientId) : ''}${e.notes ? ' — ' + e.notes : ''}</div>
+      </div>
+      <span class="entry-hours">${e.hours}h</span>
+      <span class="entry-date">${e.date}</span>
+      ${val > 0 ? `<span class="entry-value">${fmt(val)}</span>` : '<span></span>'}
+      <button class="btn btn-danger btn-sm" onclick="deleteTimeEntry('${e.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function openTimeModal() {
+  populateJobSelects();
+  document.getElementById('ft-date').value  = new Date().toISOString().split('T')[0];
+  document.getElementById('ft-hours').value = '';
+  document.getElementById('ft-notes').value = '';
+  document.getElementById('time-modal').classList.add('open');
+}
+
+async function saveTime() {
+  const jobId = document.getElementById('ft-job').value;
+  const date  = document.getElementById('ft-date').value;
+  const hours = document.getElementById('ft-hours').value;
+  if (!jobId || !date || !hours) { showToast('Job, date and hours are required', true); return; }
+  setSyncing(true);
+  try {
+    const obj = { id: uid(), jobId, date, hours: parseFloat(hours), notes: document.getElementById('ft-notes').value.trim() };
+    DB.time_entries.push(obj);
+    await appendRow('time_entries', obj);
+    setSyncing(false);
+    showToast('Time logged');
+    closeModal('time-modal');
+    renderTimeEntries();
+    renderDashboard();
+  } catch(e) { setSyncing(false, true); showToast('Save failed: ' + e.message, true); }
+}
+
+async function deleteTimeEntry(id) {
+  setSyncing(true);
+  try {
+    await deleteRow('time_entries', id);
+    setSyncing(false);
+    renderTimeEntries();
+    showToast('Entry removed');
+  } catch(e) { setSyncing(false, true); showToast('Delete failed', true); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EXPENSES
+// ═══════════════════════════════════════════════════════════════
+function populateExpenseJobSelect() {
+  const opts = DB.jobs.map(j => `<option value="${j.id}">[${clientName(j.clientId)}] ${j.title}</option>`).join('');
+  ['fe-job','exp-job-filter'].forEach(id => {
+    document.getElementById(id).innerHTML = (id.includes('filter')?'<option value="">All jobs</option>':'<option value="">Select a job...</option>') + opts;
+  });
+}
+
+function renderExpenses() {
+  populateExpenseJobSelect();
+  const jobF   = document.getElementById('exp-job-filter').value;
+  const monthF = document.getElementById('exp-month-filter').value;
+  let filtered = DB.expenses.filter(e =>
+    (!jobF   || e.jobId === jobF) &&
+    (!monthF || (e.date||'').startsWith(monthF))
+  );
+  filtered = [...filtered].sort((a,b) => b.date.localeCompare(a.date));
+
+  const total = filtered.reduce((s,e) => s+(parseFloat(e.amount)||0), 0);
+  document.getElementById('exp-total-label').textContent = filtered.length ? `Total: ${fmt(total)}` : '';
+
+  const tbody = document.getElementById('expenses-tbody');
+  const empty = document.getElementById('expenses-empty');
+  if (!filtered.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+
+  tbody.innerHTML = filtered.map(e => {
+    const job = DB.jobs.find(j => j.id === e.jobId);
+    return `<tr>
+      <td style="color:var(--muted)">${e.date}</td>
+      <td>${job ? job.title : '—'}</td>
+      <td><span class="cdot" style="background:${job?clientColor(job.clientId):'#ccc'}"></span>${job ? clientName(job.clientId) : '—'}</td>
+      <td>${e.description}</td>
+      <td style="font-weight:600;color:var(--accent)">${fmt(e.amount)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteExpense('${e.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function openExpenseModal() {
+  populateExpenseJobSelect();
+  document.getElementById('fe-date').value   = new Date().toISOString().split('T')[0];
+  document.getElementById('fe-amount').value = '';
+  document.getElementById('fe-desc').value   = '';
+  document.getElementById('expense-modal').classList.add('open');
+}
+
+async function saveExpense() {
+  const jobId  = document.getElementById('fe-job').value;
+  const date   = document.getElementById('fe-date').value;
+  const amount = document.getElementById('fe-amount').value;
+  const desc   = document.getElementById('fe-desc').value.trim();
+  if (!jobId || !date || !amount || !desc) { showToast('All fields required', true); return; }
+  setSyncing(true);
+  try {
+    const obj = { id: uid(), jobId, date, amount: parseFloat(amount), description: desc };
+    DB.expenses.push(obj);
+    await appendRow('expenses', obj);
+    setSyncing(false);
+    showToast('Expense saved');
+    closeModal('expense-modal');
+    renderExpenses();
+  } catch(e) { setSyncing(false, true); showToast('Save failed: ' + e.message, true); }
+}
+
+async function deleteExpense(id) {
+  setSyncing(true);
+  try {
+    await deleteRow('expenses', id);
+    setSyncing(false);
+    renderExpenses();
+    showToast('Expense removed');
+  } catch(e) { setSyncing(false, true); showToast('Delete failed', true); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════════════════════════
+let chartInstances = {};
+
+function populateYearSelect() {
+  const sel = document.getElementById('chart-year');
+  const years = new Set([new Date().getFullYear()]);
+  DB.time_entries.forEach(e => { if (e.date) years.add(parseInt(e.date.slice(0,4))); });
+  DB.jobs.forEach(j => { if (j.startDate) years.add(parseInt(j.startDate.slice(0,4))); });
+  const sorted = [...years].sort((a,b) => b-a);
+  const cur = sel.value || sorted[0];
+  sel.innerHTML = sorted.map(y => `<option value="${y}" ${y==cur?'selected':''}>${y}</option>`).join('');
+}
+
+function renderCharts() {
+  populateYearSelect();
+  const year = parseInt(document.getElementById('chart-year').value);
+  const months = Array.from({length:12},(_,i)=>i);
+  const ML = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const yearEntries = DB.time_entries.filter(e => e.date && e.date.startsWith(year));
+
+  // Revenue by month
+  const revenueByMonth = months.map(m => {
+    return DB.jobs.reduce((sum, job) => {
+      const entries = yearEntries.filter(e => e.jobId === job.id && parseInt(e.date.slice(5,7))-1 === m);
+      if (!entries.length && job.rateType !== 'fixed') return sum;
+      if (job.rateType === 'fixed') {
+        // prorate: fraction of total hours in this month
+        const mHours = entries.reduce((s,e) => s+(parseFloat(e.hours)||0), 0);
+        const tHours = jobHours(job.id);
+        return sum + (tHours > 0 ? (mHours/tHours)*(parseFloat(job.fixedFee)||0) : 0);
+      }
+      const hours = entries.reduce((s,e) => s+(parseFloat(e.hours)||0), 0);
+      return sum + hours * lookupRate(job.clientId, `${year}-${String(m+1).padStart(2,'0')}-15`) / 8;
+    }, 0);
+  });
+
+  // Days per client per month (stacked)
+  const clientDatasets = DB.clients.map((c, ci) => ({
+    label: c.name,
+    data: months.map(m => {
+      const jobs = DB.jobs.filter(j => j.clientId === c.id);
+      return jobs.reduce((sum, job) => {
+        const hrs = yearEntries.filter(e => e.jobId === job.id && parseInt(e.date.slice(5,7))-1 === m)
+                               .reduce((s,e) => s+(parseFloat(e.hours)||0), 0);
+        return sum + hrs/8;
+      }, 0);
+    }),
+    backgroundColor: CLIENT_PALETTE[ci % CLIENT_PALETTE.length] + 'cc',
+    borderRadius: 2,
+  }));
+
+  // Revenue by client (donut)
+  const clientRevenue = DB.clients.map(c =>
+    DB.jobs.filter(j => j.clientId === c.id && (j.startDate||'').startsWith(year))
+           .reduce((s,j) => s+jobValue(j), 0)
+  );
+
+  // Utilisation
+  const wDays = workingDaysInYear(year);
+  const billDays = yearEntries.reduce((s,e) => s+(parseFloat(e.hours)||0), 0) / 8;
+  const utilPct = wDays > 0 ? Math.min(100, (billDays/wDays)*100) : 0;
+
+  // Stats
+  const ytdRev = revenueByMonth.reduce((a,b)=>a+b,0);
+  const ytdHours = yearEntries.reduce((s,e)=>s+(parseFloat(e.hours)||0),0);
+  const topClientIdx = clientRevenue.indexOf(Math.max(...clientRevenue));
+  const topClient = DB.clients[topClientIdx]?.name || '—';
+
+  document.getElementById('chart-stats').innerHTML = `
+    <div class="stat-card red"><div class="stat-label">${year} Revenue</div><div class="stat-value">${fmt(ytdRev)}</div></div>
+    <div class="stat-card blue"><div class="stat-label">Billable Days</div><div class="stat-value">${billDays.toFixed(1)}</div><div class="stat-sub">of ${wDays} working days</div></div>
+    <div class="stat-card amber"><div class="stat-label">Top Client</div><div class="stat-value" style="font-size:20px;padding-top:6px;">${topClient}</div></div>
+    <div class="stat-card green"><div class="stat-label">Utilisation</div><div class="stat-value">${utilPct.toFixed(0)}%</div><div class="stat-sub">billable rate</div></div>
+  `;
+
+  Chart.defaults.color = '#8a8278';
+  Chart.defaults.font.family = "'Geist Mono', monospace";
+  Chart.defaults.font.size = 10;
+
+  const mk = (id, cfg) => {
+    if (chartInstances[id]) chartInstances[id].destroy();
+    chartInstances[id] = new Chart(document.getElementById(id).getContext('2d'), cfg);
+  };
+
+  mk('chart-clients', {
+    type: 'bar',
+    data: { labels: ML, datasets: clientDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position:'bottom', labels:{ boxWidth:8, padding:10 } } },
+      scales: {
+        x: { stacked:true, grid:{color:'#e2ddd6'} },
+        y: { stacked:true, grid:{color:'#e2ddd6'}, ticks:{callback:v=>v.toFixed(1)+'d'} }
+      }
+    }
+  });
+
+  mk('chart-revenue', {
+    type: 'bar',
+    data: {
+      labels: ML,
+      datasets: [{
+        label: '£',
+        data: revenueByMonth,
+        backgroundColor: '#c94a1e44',
+        borderColor: '#c94a1e',
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false} },
+      scales: {
+        x: { grid:{color:'#e2ddd6'} },
+        y: { grid:{color:'#e2ddd6'}, ticks:{callback:v=>'£'+v.toFixed(0)} }
+      }
+    }
+  });
+
+  mk('chart-pie', {
+    type: 'doughnut',
+    data: {
+      labels: DB.clients.map(c=>c.name),
+      datasets: [{
+        data: clientRevenue,
+        backgroundColor: CLIENT_PALETTE.slice(0,DB.clients.length).map(c=>c+'cc'),
+        borderColor: '#fff',
+        borderWidth: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position:'bottom', labels:{boxWidth:8,padding:8} },
+        tooltip: { callbacks:{ label:ctx=>` ${fmt(ctx.raw)}` } }
+      }
+    }
+  });
+
+  // Utilisation — rendered as HTML, not canvas
+  const months_util = months.map(m => {
+    const wDaysM = daysInMonth(year, m, true);
+    const bDaysM = yearEntries.filter(e => parseInt(e.date.slice(5,7))-1 === m)
+                              .reduce((s,e) => s+(parseFloat(e.hours)||0), 0) / 8;
+    return { label: ML[m], working: wDaysM, billable: bDaysM, pct: wDaysM > 0 ? Math.min(100,(bDaysM/wDaysM)*100) : 0 };
+  });
+
+  document.getElementById('util-detail').innerHTML = `
+    <div style="margin-bottom:12px;color:var(--muted);font-size:10px;">${billDays.toFixed(1)} billable of ${wDays} working days (${utilPct.toFixed(0)}%)</div>
+    ${months_util.map(m => `
+      <div style="display:grid;grid-template-columns:28px 1fr 32px;gap:8px;align-items:center;margin-bottom:6px;">
+        <span style="color:var(--muted);font-size:9px;">${m.label}</span>
+        <div class="util-bar-track"><div class="util-bar-fill" style="width:${m.pct}%;background:${m.pct>80?'var(--accent)':m.pct>50?'var(--amber)':'var(--accent2)'}"></div></div>
+        <span style="font-size:10px;text-align:right;color:var(--muted)">${m.billable.toFixed(1)}d</span>
+      </div>`).join('')}
+  `;
+}
+
+function daysInMonth(year, month, workingOnly) {
+  let count = 0;
+  const days = new Date(year, month+1, 0).getDate();
+  for (let d = 1; d <= days; d++) {
+    if (!workingOnly) { count++; continue; }
+    const day = new Date(year, month, d).getDay();
+    if (day !== 0 && day !== 6) count++;
+  }
+  return count;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODALS
+// ═══════════════════════════════════════════════════════════════
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+function init() {
+  const today = new Date().toISOString().slice(0,7);
+  document.getElementById('time-month-filter').value = today;
+  document.getElementById('exp-month-filter').value  = today;
+
+  if (CFG.clientId && CFG.sheetId) {
+    document.getElementById('cfg-client-id').value = CFG.clientId;
+    document.getElementById('cfg-sheet-id').value  = CFG.sheetId;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
